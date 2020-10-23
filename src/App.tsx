@@ -2,16 +2,7 @@ import React from "react";
 import { css } from "goober";
 import { usePlugin } from "./plugin";
 import "./App.css";
-// @ts-ignore TODO: Fix this
-import logo from "./assets/logo.svg";
-
 const { useEffect } = React;
-
-const greetingComment = "// Welcome to your TypeScript Playground Plugin!\n\n";
-const exampleCode = {
-  start: greetingComment + "function echo(arg) { return arg};",
-  end: greetingComment + "function echo<T>(arg:T): T {return arg;}"
-};
 
 const App: React.FC = () => {
   const {
@@ -22,16 +13,17 @@ const App: React.FC = () => {
     setDebounce,
     showModal,
     flashInfo,
-    container
+    container,
+
     // utils,
-    // sandbox,
-    // model,
+    //sandbox,
+    //model,
   } = usePlugin();
 
   setDebounce(true);
 
   useEffect(() => {
-    setCode(exampleCode.start);
+    setCode("");
   }, [setCode]);
 
   useEffect(() => {
@@ -48,10 +40,6 @@ const App: React.FC = () => {
   function handleClear() {
     setCode("");
     flashInfo("Cleared!");
-  }
-
-  function handleFixCode() {
-    setCode(exampleCode.end, { format: true });
   }
 
   function handleFormatCode() {
@@ -82,13 +70,8 @@ const App: React.FC = () => {
   return (
     <div className={wrapperClass}>
       <header>
-        <h1>TypeScript Playground Plugin</h1>
-        <h3>with React</h3>
-        <img src={logo} className="App-logo" alt="logo" />
+        <h3>Planning Day</h3>
       </header>
-      <button className={buttonClass} onClick={handleFixCode}>
-        Fix the Code
-      </button>
       <button className={buttonClass} onClick={handleFormatCode}>
         Format Code
       </button>
