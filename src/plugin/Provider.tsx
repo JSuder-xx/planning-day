@@ -2,34 +2,23 @@ import React from "react";
 import useResizeAware from "react-resize-aware";
 import { Sandbox } from "./vendor/playground";
 import { PluginUtils } from "./vendor/pluginUtils";
+import * as MonacoEditor from "monaco-editor";
+import { CustomEventArgs, bindCustomListener } from "./customEvents";
+import { ContainerObject, FlashInfo, Marker, ShowModal } from "./types";
+
 const { useState, useEffect, createContext, useCallback } = React;
+type Model = MonacoEditor.editor.ITextModel;
 
-type Model = import("monaco-editor").editor.ITextModel;
-
-type ModelMarker = import("monaco-editor").editor.IMarker;
-
-export type FlashInfo = (message: string) => void;
-
-export type ShowModal = {
-  (code: string, subtitle?: string, links?: string[]): void;
-};
-
-export const PluginContext = createContext({});
-
-type ContainerObject = {
-  ref: HTMLDivElement;
-  width: number;
-  height: number;
-};
+export const PluginContext = createContext<PluginContextProps>({} as any);
 
 export type PluginContextProps = {
   code: string;
   container: ContainerObject;
   sandbox: Sandbox;
-  model: Model;
+  model: Model | undefined;
   flashInfo: FlashInfo;
   showModal: ShowModal;
-  markers: (ModelMarker & { key: string })[];
+  markers: Marker[];
   setCode(value: string, options?: { format: boolean }): void;
   formatCode(): void;
   setDebounce(debounce: boolean): void;
@@ -45,16 +34,16 @@ export const Provider: React.FC<ProviderProps> = ({
   sandbox,
   container,
   utils,
-  children
+  children,
 }) => {
   const [model, setModel] = useState<Model>();
   const [code, _setCode] = useState(sandbox.getText());
-  const [markers, setMarkers] = useState<ModelMarker[]>([]);
+  const [markers, setMarkers] = useState<Marker[]>([]);
   const [debounce, setDebounce] = useState(false);
   const [resizeListener, sizes] = useResizeAware();
 
   const listenerFn = useCallback(
-    (evt): void => {
+    (evt: CustomEventArgs): void => {
       setModel({ ...evt.detail.model });
       _setCode(sandbox.getText());
     },
@@ -68,7 +57,7 @@ export const Provider: React.FC<ProviderProps> = ({
         .map((marker, index) => {
           return {
             ...marker,
-            key: index.toString()
+            key: index.toString(),
           };
         });
       setMarkers(allMarkers);
@@ -76,13 +65,10 @@ export const Provider: React.FC<ProviderProps> = ({
     return () => disposable.dispose();
   }, [sandbox]);
 
-  useEffect(() => {
-    const eventName = debounce ? "modelChangedDebounce" : "modelChanged";
-    window.addEventListener(eventName, listenerFn);
-    const otherEventName = debounce ? "modelChanged" : "modelChangedDebounce";
-    window.removeEventListener(otherEventName, listenerFn, false);
-    return () => window.removeEventListener(eventName, listenerFn, false);
-  }, [debounce, listenerFn]);
+  useEffect(() => bindCustomListener({ debounce, listenerFn }), [
+    debounce,
+    listenerFn,
+  ]);
 
   const setCode = useCallback(
     (value: string, options?: { format: true }) => {
@@ -102,26 +88,25 @@ export const Provider: React.FC<ProviderProps> = ({
 
   const { showModal, flashInfo } = window.playground.ui;
 
-  const containerWithDimensions: ContainerObject = {
-    ref: container,
-    ...sizes
-  };
-
-  const value = {
-    model,
-    showModal,
-    flashInfo,
-    sandbox,
-    container: containerWithDimensions,
-    code,
-    setCode,
-    formatCode,
-    setDebounce,
-    markers,
-    utils
-  };
   return (
-    <PluginContext.Provider value={value}>
+    <PluginContext.Provider
+      value={{
+        model,
+        code,
+        container: {
+          ref: container,
+          ...sizes,
+        },
+        flashInfo,
+        formatCode,
+        markers,
+        sandbox,
+        setCode,
+        setDebounce,
+        showModal,
+        utils,
+      }}
+    >
       {resizeListener}
       {children}
     </PluginContext.Provider>
