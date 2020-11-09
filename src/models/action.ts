@@ -1,9 +1,11 @@
 import { updateParsedField } from "./parsedField";
 import * as ParseResult from "./parseResult";
 import { Iteration } from "./iteration";
-import { createCode } from "./codeGenerators";
+import { createCode } from "./configuration";
 import { State } from "./state";
-
+import { createSet } from "../helpers/set";
+import { moveItem } from "../helpers/array";
+import { createIterationPlan } from "./iterationPlanFactory";
 export type UpdateTeamMembers = {
   kind: "UpdateTeamMembers";
   value: string;
@@ -47,23 +49,6 @@ const createGenerateCode = ({
     (stories, teamMembers) => () => createCode(stories, teamMembers)
   );
 
-const moveItem = <T>({
-  values,
-  fromIndex,
-  toIndex,
-}: {
-  values: readonly T[];
-  fromIndex: number;
-  toIndex: number;
-}): T[] => {
-  const newValues = values.slice(0);
-
-  const element = newValues[fromIndex];
-  newValues.splice(fromIndex, 1);
-  newValues.splice(toIndex, 0, element);
-  return newValues;
-};
-
 export const reducer = (state: State, action: Action): State => {
   switch (action.kind) {
     case "UpdateStories":
@@ -76,6 +61,7 @@ export const reducer = (state: State, action: Action): State => {
           teamMembers: state.teamMembers,
         }),
       };
+
     case "UpdateTeamMembers":
       const teamMembers = updateParsedField(state.teamMembers, action.value);
       return {
@@ -86,48 +72,58 @@ export const reducer = (state: State, action: Action): State => {
           stories: state.stories,
         }),
       };
+
     case "Generate":
       return {
         ...state,
         code: action.generateCode(),
       };
+
     case "UpdateIterationParseResult":
-      const existingStoryMap = state.storyOrdering.reduce<{
-        [story: string]: boolean;
-      }>((map, story) => {
-        map[story] = true;
-        return map;
-      }, {});
-      const newStories = ParseResult.isParseResultOK(
+      const existingStorySet = createSet(state.storyOrdering);
+      const storiesFromIteration = ParseResult.isParseResultOK(
         action.iterationParseResult
       )
         ? Object.keys(action.iterationParseResult.stories)
         : [];
+      const storiesFromIterationSet = createSet(storiesFromIteration);
+      const storyOrdering = [
+        // only keep the existing stories that are also found in the latest iteration parse
+        ...state.storyOrdering.filter((it) => storiesFromIterationSet[it]),
+        // any stories from parse that were not already present get tacked onto the end
+        ...storiesFromIteration.filter((it) => !existingStorySet[it]),
+      ];
+
       return {
         ...state,
-        storyOrdering: [
-          ...state.storyOrdering,
-          ...newStories.filter((it) => !existingStoryMap[it]),
-        ],
+        storyOrdering,
         iterationParseResult: action.iterationParseResult,
+        iterationPlan: ParseResult.isParseResultOK(action.iterationParseResult)
+          ? createIterationPlan({
+              iteration: action.iterationParseResult,
+              storyOrdering,
+            })
+          : null,
       };
 
     case "MoveStory":
-      const maxStoryIndex = state.storyOrdering.length - 1;
-      const { fromIndex, toIndex } = action;
-      return fromIndex < 0 ||
-        fromIndex > maxStoryIndex ||
-        toIndex < 0 ||
-        toIndex > maxStoryIndex ||
-        fromIndex === toIndex
-        ? state
-        : {
-            ...state,
-            storyOrdering: moveItem({
-              values: state.storyOrdering,
-              fromIndex,
-              toIndex,
-            }),
-          };
+      const storyOrderingTry = moveItem({
+        values: state.storyOrdering,
+        ...action,
+      });
+      if (storyOrderingTry instanceof Error) {
+        console.error(storyOrderingTry);
+        return state;
+      } else
+        return {
+          ...state,
+          storyOrdering: storyOrderingTry,
+          iterationPlan: ParseResult.isParseResultOK(state.iterationParseResult)
+            ? createIterationPlan({
+                iteration: state.iterationParseResult,
+                storyOrdering: storyOrderingTry,
+              })
+            : null,
+        };
   }
 };

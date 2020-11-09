@@ -2,6 +2,7 @@ import { ParsedField, initialParseState } from "./parsedField";
 import * as ParseResult from "./parseResult";
 import * as Configuration from "./configuration";
 import { Iteration } from "./iteration";
+import { IterationPlan } from "./iterationPlan";
 
 export type State = {
   readonly teamMembers: ParsedField<Configuration.TeamMembers>;
@@ -12,6 +13,7 @@ export type State = {
   readonly storyOrdering: readonly string[];
   /** iteration parsed from the TypeScript playground */
   readonly iterationParseResult: ParseResult.T<Iteration>;
+  readonly iterationPlan: IterationPlan | null | Error;
 };
 
 export const initial: State = {
@@ -30,5 +32,6 @@ export const initial: State = {
   code: "",
   generateCode: null,
   iterationParseResult: null,
+  iterationPlan: null,
   storyOrdering: [],
 };

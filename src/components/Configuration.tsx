@@ -1,8 +1,8 @@
 import React from "react";
 import { css } from "goober";
-import { useApplicationState } from "../application-state/useApplicationState";
-import ParsedField from "../parsed-field/ParsedField";
-import * as ParsedResult from "../application-state/parseResult";
+import { useApplicationState } from "./ApplicationStateContext";
+import ParsedField from "./ParsedField";
+import * as ParsedResult from "../models/parseResult";
 
 const colors = {
   gray: "hsla(0, 0%, 21%, 1)",
@@ -10,7 +10,6 @@ const colors = {
 };
 
 const wrapperClass = css`
-  min-height: 100vh;
   color: white;
 `;
 

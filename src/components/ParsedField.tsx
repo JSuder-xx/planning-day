@@ -1,5 +1,5 @@
 import React from "react";
-import * as State from "../application-state/parsedField";
+import * as ParsedFieldModule from "../models/parsedField";
 import { css } from "goober";
 
 const errorMessageClass = css({
@@ -21,7 +21,7 @@ const ParsedField = <T extends unknown>({
   },
   isMultiline,
 }: {
-  parsedField: State.ParsedField<T>;
+  parsedField: ParsedFieldModule.ParsedField<T>;
   updateRawValue: (newValue: string) => void;
   isMultiline?: boolean;
 }) => (

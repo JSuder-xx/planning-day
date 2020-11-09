@@ -1,8 +1,8 @@
 import React from "react";
 import { css } from "goober";
-import { Provider as ApplicationStateProvider } from "./application-state/Provider";
-import Configuration from "./configuration/Configuration";
-import Visualization from "./visualization/Visualization";
+import { Provider as ApplicationStateProvider } from "./ApplicationStateContext";
+import Configuration from "./Configuration";
+import Visualization from "./Visualization";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
