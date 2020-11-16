@@ -1,5 +1,5 @@
 {
-  "private": true,
+  "private": false,
   "name": "planning-day",
   "description": "TypeScript Playground plugin for planning an agile sprint or iteration by combining static type verification of configuration with a React Gantt chart visualization.",
   "version": "0.1.0",
