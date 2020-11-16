@@ -1,3 +1,5 @@
+import { ZeroBasedNumber } from "./numbers";
+
 export type DayWorked = {
   startOfDay: number;
   partOfDay: number;
@@ -20,9 +22,11 @@ export type PlannedStory = {
 
 export type IterationPlan = {
   readonly dates: {
-    lastDayOfCoding: number;
-    endOfIteration: number;
-    lastStoryCompleted: number;
+    lastDayOfCoding: ZeroBasedNumber;
+    endOfIteration: ZeroBasedNumber;
+    lastStoryCompleted: ZeroBasedNumber;
+    /** The day of the week for day number 0. */
+    startDayOfWeek: number;
   };
   readonly stories: readonly PlannedStory[];
 };

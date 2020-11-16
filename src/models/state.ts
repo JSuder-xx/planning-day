@@ -1,5 +1,5 @@
 import { ParsedField, initialParseState } from "./parsedField";
-import * as ParseResult from "./parseResult";
+import * as Result from "./result";
 import * as Configuration from "./configuration";
 import { Iteration } from "./iteration";
 import { IterationPlan } from "./iterationPlan";
@@ -7,13 +7,14 @@ import { IterationPlan } from "./iterationPlan";
 export type State = {
   readonly teamMembers: ParsedField<Configuration.TeamMembers>;
   readonly stories: ParsedField<Configuration.Stories>;
-  readonly code: string;
-  readonly generateCode: ParseResult.T<() => string>;
+  readonly generateTypeScriptCodeResult: Result.T<() => string>;
+  readonly typeScriptCode: string;
   /** story ordering set by user */
   readonly storyOrdering: readonly string[];
   /** iteration parsed from the TypeScript playground */
-  readonly iterationParseResult: ParseResult.T<Iteration>;
-  readonly iterationPlan: IterationPlan | null | Error;
+  readonly iterationResult: Result.T<Iteration>;
+  /** The plan is generated from the iteration. */
+  readonly iterationPlanResult: Result.T<IterationPlan>;
 };
 
 export const initial: State = {
@@ -29,9 +30,9 @@ export const initial: State = {
     parser: Configuration.storiesParser,
     instructions: `Enter one story per line. If you want to provide a description enter the identifier comma description ex. "S123, Build the the thing"`,
   },
-  code: "",
-  generateCode: null,
-  iterationParseResult: null,
-  iterationPlan: null,
+  typeScriptCode: "",
+  generateTypeScriptCodeResult: null,
+  iterationResult: null,
+  iterationPlanResult: null,
   storyOrdering: [],
 };

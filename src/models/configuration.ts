@@ -1,4 +1,4 @@
-import * as ParseResult from "./parseResult";
+import * as Result from "./result";
 import { formatDate, addDays } from "../helpers/date";
 export type TeamMembers = { teamMembers: readonly string[] };
 
@@ -23,8 +23,8 @@ export const storiesParser = (str: string) => {
   const cleaned = (str || "").trim();
   if (cleaned.length === 0) return null;
 
-  return ParseResult.flatMap(
-    ParseResult.aggregateResults(
+  return Result.flatMap(
+    Result.aggregateResults(
       cleaned
         .split("\n")
         .map((it) => it.trim())
@@ -34,10 +34,8 @@ export const storiesParser = (str: string) => {
             .split(",")
             .map((it) => it.trim())
             .filter((it) => it.length > 0);
-          return storyColumns.length === 1
-            ? [storyColumns[0]]
-            : storyColumns.length === 2
-            ? [storyColumns[0], storyColumns[1]]
+          return storyColumns.length === 1 || storyColumns.length === 2
+            ? storyColumns
             : new Error(
                 `Story # ${
                   index + 1
@@ -47,25 +45,19 @@ export const storiesParser = (str: string) => {
               );
         })
     ),
-    (stories) => {
-      return stories.every((it) => it.length === 2)
-        ? stories.map(
-            ([name, description]): Story => ({
-              name,
-              description,
-            })
-          )
-        : stories.every((it) => it.length === 1)
-        ? stories.map(
-            ([name]): Story => ({
-              name,
-              description: null,
-            })
-          )
-        : new Error(
-            `Expected every story to either have a single column or two columns.`
-          );
-    }
+    (stories) =>
+      stories.map(
+        (storyParts): Story =>
+          storyParts.length === 1
+            ? {
+                name: storyParts[0],
+                description: storyParts[0],
+              }
+            : {
+                name: storyParts[0],
+                description: storyParts[1],
+              }
+      )
   );
 };
 
@@ -77,13 +69,28 @@ const teamMemberCode = (teamMember: string) => `
             hoursPerDay: 6
         },`;
 
-const storyCode = (story: Story) => `
+const exampleTeamMemberHour = (teamMember: string, index: number) =>
+  `                // ${index > 0 ? ", " : ""}"${teamMember}": 0`;
+
+const exampleTeamMembersHours = (
+  teamMembers: readonly string[],
+  index: number
+) => (index === 0 ? teamMembers.map(exampleTeamMemberHour).join("\n") : "");
+
+const storyCode = (teamMembers: readonly string[]) => (
+  story: Story,
+  index: number
+) => `
         "${story.name}": { 
-            id: "${story.name}",
             description: "${story.description ?? story.name}",
-            devHourEstimates: {},
-            qaHourEstimates: {},
-            // dependsOn: []
+            devHourEstimates: {                
+${exampleTeamMembersHours(teamMembers, index)}
+            },
+            qaHourEstimates: {
+${exampleTeamMembersHours(teamMembers, index)}
+            },
+            // Uncomment "dependsOn" below and provide story identifiers of other stories this story depends upon.            
+            // dependsOn: [] 
         },`;
 
 export const createCode = (
@@ -91,48 +98,54 @@ export const createCode = (
   { teamMembers }: TeamMembers
 ): string =>
   `type HoursPerDay = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-
 type HourEstimates<teamMembers extends string> = { [teamMember in teamMembers]?: number; };
-
 type Story<storyNames extends string, storyName extends string, teamMembers extends string> = {
-    id: storyName;
     description: string;
     devHourEstimates: HourEstimates<teamMembers>;
     qaHourEstimates: HourEstimates<teamMembers>;
     dependsOn?: Exclude<storyNames, storyName>[];
 };
-
 type TeamSchedule<teamMembers extends string> = { [teamMember in teamMembers]: TeamMemberSchedule; };
-
 type TeamMemberSchedule = { ptoDays: string[]; hoursPerDay: HoursPerDay; };
-
 type Stories<storyNames extends string, teamMembers extends string> = {
   [storyName in storyNames]: Story<storyNames, storyName, teamMembers>;
 };
-
 type Iteration<teamMembers extends string, storyNames extends string> = {
   dates: {
-    start: string;
+    firstDayOfIteration: string;
     lastDayOfCoding: string;
-    end: string;
+    lastDayOfIteration: string;
   };
   teamSchedule: TeamSchedule<teamMembers>;
   stories: Stories<storyNames, teamMembers>;
 };
+//------------------ Disregard Everything Above This Line --------------------
 
-type TeamMembers = ${teamMembers.map(quote).join("|")};
-type StoryNames = ${stories.map((it) => quote(it.name)).join("|")};
+/** 💥 Modify team members by first changing this type and then updating the iteration specification below. */
+type TeamMembers = ${teamMembers.map(quote).join(" | ")};
+/** 💥 Modify the list of stories by first changing this type and then updating the iteration specification below. */
+type StoryNames = ${stories.map((it) => quote(it.name)).join(" | ")};
 const defineIteration = (iteration: Iteration<TeamMembers, StoryNames>) => iteration;
 
+/**
+ * # Iteration Parameters.
+ * Configure your iteration below
+ * - Meaningful dates of the iteration
+ * - Individual team member PTO days and average work capacity
+ * - Individual story task assignment and estimation.
+ * 
+ * When the configuration passes a minimum of validation then a planning visualization
+ * will display on the right.
+ */
 defineIteration({
     dates: {
-        start: "${formatDate(new Date())}",
-        end: "${formatDate(addDays(new Date(), 13))}",
+        firstDayOfIteration: "${formatDate(new Date())}",
+        lastDayOfIteration: "${formatDate(addDays(new Date(), 13))}",
         lastDayOfCoding: "${formatDate(addDays(new Date(), 10))}"
     },
     teamSchedule: {${teamMembers.map(teamMemberCode).join("")}
     },
-    stories: {${stories.map(storyCode).join("")}
+    stories: {${stories.map(storyCode(teamMembers)).join("")}
     }
 });
 `;

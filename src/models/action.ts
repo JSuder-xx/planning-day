@@ -1,49 +1,50 @@
 import { updateParsedField } from "./parsedField";
-import * as ParseResult from "./parseResult";
+import * as Result from "./result";
 import { Iteration } from "./iteration";
 import { createCode } from "./configuration";
 import { State } from "./state";
 import { createSet } from "../helpers/set";
 import { moveItem } from "../helpers/array";
 import { createIterationPlan } from "./iterationPlanFactory";
+
 export type UpdateTeamMembers = {
-  kind: "UpdateTeamMembers";
-  value: string;
+  readonly kind: "UpdateTeamMembers";
+  readonly value: string;
 };
 
 export type UpdateStories = {
-  kind: "UpdateStories";
-  value: string;
+  readonly kind: "UpdateStories";
+  readonly value: string;
 };
 
-export type Generate = {
-  kind: "Generate";
+export type GenerateTypeScriptCode = {
+  readonly kind: "GenerateTypeScriptCode";
   generateCode: () => string;
 };
 
-export type UpdateIterationParseResult = {
-  kind: "UpdateIterationParseResult";
-  readonly iterationParseResult: ParseResult.T<Iteration>;
+export type UpdateIterationResult = {
+  readonly kind: "UpdateIterationResult";
+  readonly iterationResult: Result.T<Iteration>;
 };
 
 export type MoveStory = {
-  kind: "MoveStory";
-  fromIndex: number;
-  toIndex: number;
+  readonly kind: "MoveStory";
+  readonly fromIndex: number;
+  readonly toIndex: number;
 };
 
 export type Action =
   | UpdateTeamMembers
   | UpdateStories
-  | Generate
-  | UpdateIterationParseResult
+  | GenerateTypeScriptCode
+  | UpdateIterationResult
   | MoveStory;
 
 const createGenerateCode = ({
   stories,
   teamMembers,
 }: Pick<State, "stories" | "teamMembers">) =>
-  ParseResult.map2(
+  Result.map2(
     stories.value.result,
     teamMembers.value.result,
     (stories, teamMembers) => () => createCode(stories, teamMembers)
@@ -56,7 +57,7 @@ export const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         stories,
-        generateCode: createGenerateCode({
+        generateTypeScriptCodeResult: createGenerateCode({
           stories,
           teamMembers: state.teamMembers,
         }),
@@ -67,24 +68,22 @@ export const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         teamMembers,
-        generateCode: createGenerateCode({
+        generateTypeScriptCodeResult: createGenerateCode({
           teamMembers,
           stories: state.stories,
         }),
       };
 
-    case "Generate":
+    case "GenerateTypeScriptCode":
       return {
         ...state,
-        code: action.generateCode(),
+        typeScriptCode: action.generateCode(),
       };
 
-    case "UpdateIterationParseResult":
+    case "UpdateIterationResult":
       const existingStorySet = createSet(state.storyOrdering);
-      const storiesFromIteration = ParseResult.isParseResultOK(
-        action.iterationParseResult
-      )
-        ? Object.keys(action.iterationParseResult.stories)
+      const storiesFromIteration = Result.isOK(action.iterationResult)
+        ? Object.keys(action.iterationResult.stories)
         : [];
       const storiesFromIterationSet = createSet(storiesFromIteration);
       const storyOrdering = [
@@ -97,10 +96,10 @@ export const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         storyOrdering,
-        iterationParseResult: action.iterationParseResult,
-        iterationPlan: ParseResult.isParseResultOK(action.iterationParseResult)
+        iterationResult: action.iterationResult,
+        iterationPlanResult: Result.isOK(action.iterationResult)
           ? createIterationPlan({
-              iteration: action.iterationParseResult,
+              iteration: action.iterationResult,
               storyOrdering,
             })
           : null,
@@ -118,9 +117,9 @@ export const reducer = (state: State, action: Action): State => {
         return {
           ...state,
           storyOrdering: storyOrderingTry,
-          iterationPlan: ParseResult.isParseResultOK(state.iterationParseResult)
+          iterationPlanResult: Result.isOK(state.iterationResult)
             ? createIterationPlan({
-                iteration: state.iterationParseResult,
+                iteration: state.iterationResult,
                 storyOrdering: storyOrderingTry,
               })
             : null,

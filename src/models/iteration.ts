@@ -1,4 +1,4 @@
-import * as ParseResult from "./parseResult";
+import * as Result from "./result";
 import { checkFields } from "../helpers/typeGuards";
 import { convertToDate, getDaysOffset } from "../helpers/date";
 import { range } from "../helpers/numbers";
@@ -14,7 +14,6 @@ export type Activity = {
 export type HourEstimates = { [assignee: string]: number };
 
 export type Story = {
-  id: string;
   description: string;
   devHourEstimates: HourEstimates;
   qaHourEstimates: HourEstimates;
@@ -33,9 +32,9 @@ export type Stories = {
 };
 
 export type Dates<dateType> = {
-  start: dateType;
+  firstDayOfIteration: dateType;
   lastDayOfCoding: dateType;
-  end: dateType;
+  lastDayOfIteration: dateType;
 };
 
 type IterationJSON = {
@@ -45,15 +44,21 @@ type IterationJSON = {
 };
 
 export type Iteration = {
-  dates: Dates<number>;
+  startDayOfWeek: number;
+  userDates: Dates<number>;
+  lastDayToConsider: number;
   weekendDays: number[];
   teamSchedule: TeamSchedule<number>;
   stories: Stories;
 };
 
 const isIteration = (json: any): json is IterationJSON =>
-  checkFields<Iteration>(json, ["dates", "teamSchedule", "stories"]) &&
-  checkFields<Dates<string>>(json.dates, ["start", "end", "lastDayOfCoding"]);
+  checkFields<IterationJSON>(json, ["dates", "teamSchedule", "stories"]) &&
+  checkFields<Dates<string>>(json.dates, [
+    "firstDayOfIteration",
+    "lastDayOfIteration",
+    "lastDayOfCoding",
+  ]);
 
 const convertObjectToDate = <T extends { [prop: string]: string }, TDate>(
   obj: T,
@@ -71,19 +76,24 @@ const convertObjectToDate = <T extends { [prop: string]: string }, TDate>(
   return result;
 };
 
-export const checkIteration = (json: any): ParseResult.T<Iteration> => {
+/** The number of days past the end of the iteration that we will continue to calculate weekend days. */
+const pastIterationEndBuffer = 14;
+
+export const parseIterationJson = (json: any): Result.T<Iteration> => {
   if (isIteration(json)) {
     try {
-      const startDate = TryM.getValue(convertToDate(json.dates.start));
-      const startDateDayOfWeek = startDate.getDay();
+      const startDate = TryM.getValue(
+        convertToDate(json.dates.firstDayOfIteration)
+      );
+      const startDayOfWeek = startDate.getDay();
       const dayOffset = getDaysOffset(startDate);
-      const dates: Dates<number> = convertObjectToDate(json.dates, (str) =>
+      const userDates: Dates<number> = convertObjectToDate(json.dates, (str) =>
         TryM.map(convertToDate(str), dayOffset)
       );
 
-      if (dates.end < dates.start)
+      if (userDates.lastDayOfIteration < userDates.firstDayOfIteration)
         return new Error(`End date must be before the start date.`);
-      if (dates.lastDayOfCoding > dates.end)
+      if (userDates.lastDayOfCoding > userDates.lastDayOfIteration)
         return new Error(
           `Last day of coding must be on or prior to last day of iteration.`
         );
@@ -100,31 +110,63 @@ export const checkIteration = (json: any): ParseResult.T<Iteration> => {
           }
         ),
         stories: json.stories,
-        dates,
-        weekendDays: range(0, dates.end).filter((it) => {
-          const adjustedDay = (it + startDateDayOfWeek) % 7;
+        userDates,
+        weekendDays: range(
+          0,
+          userDates.lastDayOfIteration + pastIterationEndBuffer
+        ).filter((it) => {
+          const adjustedDay = (it + startDayOfWeek) % 7;
           return adjustedDay === 0 || adjustedDay === 6;
         }),
       };
 
-      const storyErrors = flatten(
-        mapToArray(result.stories, (_, story) => {
-          if (!!story.dependsOn) {
-            const badReferences = story.dependsOn.filter(
-              (otherStoryReference) => !result.stories[otherStoryReference]
+      const errors = [
+        ...flatten(
+          mapToArray(result.teamSchedule, (teamMember, teamMemberSchedule) => {
+            const daysBeforeIteration = teamMemberSchedule.ptoDays.filter(
+              (day) => day < 0
             );
-            if (badReferences.length > 0)
-              return [
-                `Story ${story.id} depends on the following story identifiers which don't exist ${badReferences}`,
-              ];
-          }
-          return [];
-        })
-      );
+            const daysAfterIteration = teamMemberSchedule.ptoDays.filter(
+              (day) => day > result.userDates.lastDayOfIteration
+            );
+            return [
+              ...(daysBeforeIteration.length > 0
+                ? [
+                    `${teamMember} has PTO days listed which are prior to the start of the iteration.`,
+                  ]
+                : []),
+              ...(daysAfterIteration.length > 0
+                ? [
+                    `${teamMember} has PTO days listed which follow the last day of the iteration.`,
+                  ]
+                : []),
+            ];
+          })
+        ),
+        ...flatten(
+          mapToArray(result.stories, (storyId, story) => {
+            if (!!story.dependsOn) {
+              const badReferences = story.dependsOn.filter(
+                (otherStoryReference) => !result.stories[otherStoryReference]
+              );
+              if (badReferences.length > 0)
+                return [
+                  `Story ${storyId} depends on the following story identifiers which don't exist ${badReferences}`,
+                ];
+            }
+            return [];
+          })
+        ),
+      ];
 
-      return storyErrors.length > 0
-        ? new Error(storyErrors.join(", "))
-        : result;
+      return errors.length > 0
+        ? new Error(errors.join(", "))
+        : {
+            ...result,
+            startDayOfWeek,
+            lastDayToConsider:
+              result.userDates.lastDayOfIteration + pastIterationEndBuffer,
+          };
     } catch (ex) {
       return ex instanceof Error ? ex : new Error(ex + "");
     }

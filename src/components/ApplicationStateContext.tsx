@@ -1,6 +1,6 @@
 import React, { useReducer, createContext, useEffect, useContext } from "react";
 import { usePlugin } from "../plugin";
-import { checkIteration } from "../models/iteration";
+import { parseIterationJson } from "../models/iteration";
 import { State, initial } from "../models/state";
 import { Action, reducer } from "../models/action";
 
@@ -23,21 +23,42 @@ export const Provider: React.FC<{}> = ({ children }) => {
   setDebounce(true);
 
   useEffect(() => {
-    setCode(state.code);
-  }, [setCode, state.code]);
+    setCode(state.typeScriptCode);
+  }, [setCode, state.typeScriptCode]);
 
   useEffect(() => {
-    if (markers.length > 0) return;
-    if ((code || "").trim().length === 0) return;
-
-    sandbox.getRunnableJS().then((js) => {
-      try {
-        dispatch({
-          kind: "UpdateIterationParseResult",
-          iterationParseResult: checkIteration(myEval(js)),
+    if (markers.length > 0)
+      dispatch({
+        kind: "UpdateIterationResult",
+        iterationResult: new Error(markers.map((it) => it.message).join(", ")),
+      });
+    else if ((code || "").trim().length === 0)
+      dispatch({
+        kind: "UpdateIterationResult",
+        iterationResult: null,
+      });
+    else
+      sandbox
+        .getRunnableJS()
+        .then((js) => {
+          try {
+            dispatch({
+              kind: "UpdateIterationResult",
+              iterationResult: parseIterationJson(myEval(js)),
+            });
+          } catch (err) {
+            dispatch({
+              kind: "UpdateIterationResult",
+              iterationResult: new Error(err + ""),
+            });
+          }
+        })
+        .catch((err) => {
+          dispatch({
+            kind: "UpdateIterationResult",
+            iterationResult: new Error(err + ""),
+          });
         });
-      } catch (_) {}
-    });
   }, [code, markers, sandbox]);
 
   return (

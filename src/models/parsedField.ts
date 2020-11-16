@@ -1,10 +1,10 @@
-import * as ParseResult from "./parseResult";
+import * as Result from "./result";
 
-export type Parser<T> = (value: string) => ParseResult.T<T>;
+export type Parser<T> = (value: string) => Result.T<T>;
 
 export type ParseState<T> = {
   readonly rawInput: string;
-  readonly result: ParseResult.T<T>;
+  readonly result: Result.T<T>;
 };
 
 export const initialParseState: ParseState<any> = {

@@ -1,5 +1,6 @@
 import { IterationPlan, PlannedStory, PlannedTask } from "./iterationPlan";
 import { Iteration, Story, TeamSchedule } from "./iteration";
+import { zeroBasedNumber } from "./numbers";
 import {
   aggregate,
   createMap,
@@ -11,6 +12,8 @@ import {
 import { lastItemThrow, flatMap } from "../helpers/array";
 
 type TaskIdentifier = string & { __marker: "TaskIdentifier" };
+
+type StoryWithId = Story & { id: string };
 
 type Task = {
   story: string;
@@ -39,7 +42,7 @@ const taskId = ({
 type UnscheduledResource = {
   readonly name: string;
   readonly tasks: readonly Task[];
-  readonly daysTaken: Map<number, "pto" | "scheduled">;
+  readonly capacityAvailableOnDay: Map<number, number>;
 };
 
 type MutableScheduledResource = {
@@ -55,7 +58,7 @@ type ScheduledResource = {
 };
 
 const createResources = (
-  stories: Story[],
+  stories: StoryWithId[],
   teamSchedule: TeamSchedule<number>,
   weekendDays: number[]
 ): UnscheduledResource[] => {
@@ -114,23 +117,32 @@ const createResources = (
   });
 
   return mapToArray(resourceMap, (name, tasks) => {
-    const daysTaken = new Map<number, "pto" | "scheduled">();
-    teamSchedule[name].ptoDays.forEach((day) => daysTaken.set(day, "pto"));
-    weekendDays.forEach((day) => daysTaken.set(day, "pto"));
+    const capacityAvailableOnDay = new Map<number, number>();
+    const teamMemberSchedule = teamSchedule[name];
+    for (let dayNumber = 0; dayNumber < 60; dayNumber++) {
+      capacityAvailableOnDay.set(dayNumber, 1);
+    }
+    teamMemberSchedule.ptoDays.forEach((day) =>
+      capacityAvailableOnDay.set(day, 0)
+    );
+    weekendDays.forEach((day) => capacityAvailableOnDay.set(day, 0));
     return {
       name,
       tasks,
-      daysTaken,
+      capacityAvailableOnDay,
     };
   });
 };
 
+const fractionOf = (num: number): number => num - Math.floor(num);
+
 const scheduleResources = (
-  unscheduledResources: UnscheduledResource[]
+  unscheduledResources: UnscheduledResource[],
+  pastEndOfIterationBuffer: number
 ): ScheduledResource[] => {
-  const resourceNameToDaysTaken = mapMap(
+  const resourceNameToCapacityAvailable = mapMap(
     createMap(unscheduledResources, (it) => it.name),
-    (_, val) => val.daysTaken
+    (_, val) => val.capacityAvailableOnDay
   );
   const resources: MutableScheduledResource[] = unscheduledResources.map(
     ({ name, tasks }): MutableScheduledResource => ({
@@ -170,9 +182,10 @@ const scheduleResources = (
     resource.remainingTasks.shift();
     resource.scheduledTasks.push(
       scheduleTask(
-        resourceNameToDaysTaken[resource.name],
+        resourceNameToCapacityAvailable[resource.name],
         pendingTask,
-        dependenciesTry
+        dependenciesTry,
+        pastEndOfIterationBuffer
       )
     );
     return true;
@@ -192,43 +205,53 @@ const scheduleResources = (
   }
 
   function scheduleTask(
-    daysTaken: Map<number, "pto" | "scheduled">,
+    capacityAvailableOnDayMap: Map<number, number>,
     task: Task,
-    dependencies: ScheduledTask[]
+    dependencies: ScheduledTask[],
+    pastEndOfIterationBuffer: number
   ): ScheduledTask {
-    const lastDependencyEnds = dependencies.reduce<number>(
-      (maxDay, scheduledTask) => {
-        const lastDayWorked = lastItemThrow(scheduledTask.daysWorked);
-        return Math.max(
-          lastDayWorked.startOfDay + lastDayWorked.partOfDay,
-          maxDay
-        );
-      },
-      0
-    );
+    let startOn = dependencies.reduce<number>((maxDay, scheduledTask) => {
+      const lastDayWorked = lastItemThrow(scheduledTask.daysWorked);
+      return Math.max(
+        lastDayWorked.startOfDay + lastDayWorked.partOfDay,
+        maxDay
+      );
+    }, 0);
 
     const daysWorked: DayWorked[] = [];
     let remainingDays: number = task.durationInDays;
-    if (!daysTaken.get(Math.floor(lastDependencyEnds))) {
-      const available =
-        1.0 - (lastDependencyEnds - Math.floor(lastDependencyEnds));
-      const partOfDay = Math.min(remainingDays, available);
+    const capacityAvailableOnDay = capacityAvailableOnDayMap.get(
+      Math.floor(startOn)
+    );
+    if (capacityAvailableOnDay !== undefined && capacityAvailableOnDay > 0) {
+      startOn = startOn + (1 - capacityAvailableOnDay);
+      const partOfDay = Math.min(remainingDays, 1 - fractionOf(startOn));
       remainingDays -= partOfDay;
-      daysTaken.set(Math.floor(lastDependencyEnds), "scheduled");
+      capacityAvailableOnDayMap.set(
+        Math.floor(startOn),
+        capacityAvailableOnDay - partOfDay
+      );
       daysWorked.push({
-        startOfDay: lastDependencyEnds,
+        startOfDay: startOn,
         partOfDay,
       });
     }
-    let currentDay = Math.floor(lastDependencyEnds) + 1;
+    let currentDay = Math.floor(startOn) + 1;
 
-    while (remainingDays > 0) {
-      if (!daysTaken.get(Math.floor(currentDay))) {
-        const partOfDay = Math.min(remainingDays, 1.0);
+    while (remainingDays > 0 && currentDay < pastEndOfIterationBuffer) {
+      const capacityAvailableOnDay = capacityAvailableOnDayMap.get(
+        Math.floor(currentDay)
+      );
+      if (capacityAvailableOnDay !== undefined && capacityAvailableOnDay > 0) {
+        const partOfDay = Math.min(remainingDays, capacityAvailableOnDay);
         remainingDays -= partOfDay;
-        daysTaken.set(currentDay, "scheduled");
+        capacityAvailableOnDayMap.set(
+          Math.floor(currentDay),
+          capacityAvailableOnDay - partOfDay
+        );
+
         daysWorked.push({
-          startOfDay: currentDay,
+          startOfDay: currentDay + (1 - capacityAvailableOnDay),
           partOfDay,
         });
       }
@@ -245,6 +268,13 @@ const scheduleResources = (
   }
 };
 
+/**
+ * Create the iteration plan from the iteration (parsed from the TypeScript Playground) and the story ordering.
+ *
+ * **⛔ATTENTION:** Do **NOT** look to this file for algorithm elegance!!! This was thrown together brute force.
+ * I will clean it up in the future. For now I am concentrating on proving the concept of using the
+ * TypeScript Playground and type-checker as a _complement_ to a classic GUI.
+ */
 export const createIterationPlan = ({
   iteration,
   storyOrdering,
@@ -254,13 +284,19 @@ export const createIterationPlan = ({
 }): IterationPlan => {
   const storyMap = iteration.stories;
 
-  const stories = storyOrdering.map((storyName) => storyMap[storyName]);
+  const stories: StoryWithId[] = storyOrdering.map((id) => ({
+    id,
+    ...storyMap[id],
+  }));
   const resources = createResources(
     stories,
     iteration.teamSchedule,
     iteration.weekendDays
   );
-  const scheduledResources = scheduleResources(resources);
+  const scheduledResources = scheduleResources(
+    resources,
+    iteration.lastDayToConsider
+  );
   const scheduledTasksByStory = aggregate(
     flatMap(scheduledResources, (resource) => resource.scheduledTasks),
     (task) => task.story
@@ -274,15 +310,18 @@ export const createIterationPlan = ({
 
   return {
     dates: {
-      lastDayOfCoding: iteration.dates.lastDayOfCoding,
-      endOfIteration: iteration.dates.end,
-      lastStoryCompleted: plannedStories.reduce<number>(
-        (lastDay, current) =>
-          current.completedDayNumberMaybe === null
-            ? lastDay
-            : Math.max(lastDay, current.completedDayNumberMaybe),
-        0
+      lastDayOfCoding: zeroBasedNumber(iteration.userDates.lastDayOfCoding),
+      endOfIteration: zeroBasedNumber(iteration.userDates.lastDayOfIteration),
+      lastStoryCompleted: zeroBasedNumber(
+        plannedStories.reduce<number>(
+          (lastDay, current) =>
+            current.completedDayNumberMaybe === null
+              ? lastDay
+              : Math.max(lastDay, current.completedDayNumberMaybe),
+          0
+        )
       ),
+      startDayOfWeek: iteration.startDayOfWeek,
     },
     stories: plannedStories,
   };
@@ -317,10 +356,13 @@ export const createIterationPlan = ({
           ? null
           : scheduledTasks.reduce<number>(
               (max, current) =>
-                Math.max(
-                  max,
-                  current.daysWorked[current.daysWorked.length - 1].startOfDay
-                ),
+                current.daysWorked.length === 0
+                  ? max
+                  : Math.max(
+                      max,
+                      current.daysWorked[current.daysWorked.length - 1]
+                        .startOfDay
+                    ),
               0
             ),
     };

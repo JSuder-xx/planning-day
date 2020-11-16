@@ -12,6 +12,11 @@ export default (utils: PluginUtils): PlaygroundPlugin => ({
   id: "planning-day",
   displayName: "Planning Day",
   didMount(sandbox, container) {
+    sandbox.setCompilerSettings({
+      ...sandbox.getCompilerOptions(),
+      strict: true,
+      noEmitOnError: true,
+    });
     ReactDOM.render(
       <Provider
         sandbox={sandbox}

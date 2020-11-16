@@ -1,14 +1,23 @@
-This will support the following work flow
+# Overview
 
-### Setup State (Initial)
-1. User enters team member names as a comma delimited list
-2. User enters (storyId, storyTitle) list.
-3. Click (Generate) will set the code in the playground to be the Planning Day data definition starter.
-4. Transition to visualization state.
+TypeScript Language Playground Plug-In to support planning an iteration of work. 
 
-### Visualization State
-1. User can edit the program on the left to change parameters.
-2. On the right user can use interactive visualization to drag/drop story ordering.
-3. The plugin visualization includes
-  a. Story dependency arrows (top)
-  b. Gantt Chart (bottom)
+This is an experiment in using the TypeScript type system to complement a standard graphical user interface.
+
+## Configuration
+In a GUI provided by the plugin 
+
+- Enumerate all Dev and QA team members.
+- Enter all story identifiers
+- Click **GenerateTypeScriptCode Code** which will generate TypeScript which defines the iteration.
+
+![Configuration](configuration.png)
+
+## Visualization
+After generating code the plugin will shift into a Sprint visualization mode 
+- Configure the iteration in the Playground's TypeScript code editor by modifying a type-checked JSON object. 
+- On the right 
+    - Interactive re-ordering of stories through drag/drop.
+    - Read-only Gantt chart display of the iteration.
+    
+![Visualization Mode](visualization.png)

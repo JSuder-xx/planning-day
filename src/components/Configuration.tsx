@@ -2,7 +2,7 @@ import React from "react";
 import { css } from "goober";
 import { useApplicationState } from "./ApplicationStateContext";
 import ParsedField from "./ParsedField";
-import * as ParsedResult from "../models/parseResult";
+import * as ParsedResult from "../models/result";
 
 const colors = {
   gray: "hsla(0, 0%, 21%, 1)",
@@ -32,12 +32,19 @@ const buttonClass = css`
 
 const Configuration = () => {
   const { state, dispatch } = useApplicationState();
-  const { generateCode, iterationParseResult } = state;
+  const { generateTypeScriptCodeResult, iterationResult } = state;
 
-  return ParsedResult.isParseResultOK(iterationParseResult) ? (
+  return ParsedResult.isOK(iterationResult) ||
+    iterationResult instanceof Error ? (
     <></>
   ) : (
     <div className={wrapperClass}>
+      <h3>Initial Configuration</h3>
+      <p>
+        Enumerate team members and stories below. When satisfied click Generate
+        Code to produce TypeScript code in the Playground to the left which
+        defines your Sprint Iteration.
+      </p>
       <ParsedField
         key="team-members"
         parsedField={state.teamMembers}
@@ -51,10 +58,15 @@ const Configuration = () => {
         isMultiline={true}
         updateRawValue={(value) => dispatch({ kind: "UpdateStories", value })}
       />
-      {ParsedResult.isParseResultOK(generateCode) && (
+      {ParsedResult.isOK(generateTypeScriptCodeResult) && (
         <button
           className={buttonClass}
-          onClick={() => dispatch({ kind: "Generate", generateCode })}
+          onClick={() =>
+            dispatch({
+              kind: "GenerateTypeScriptCode",
+              generateCode: generateTypeScriptCodeResult,
+            })
+          }
         >
           Generate Code
         </button>

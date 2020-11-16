@@ -1,6 +1,6 @@
 import React from "react";
 import { useRef } from "react";
-import * as ParseResult from "../models/parseResult";
+import * as Result from "../models/result";
 import { css } from "goober";
 import { Iteration } from "../models/iteration";
 import { useApplicationState } from "./ApplicationStateContext";
@@ -39,7 +39,7 @@ const storyFactory = (
   storyIndexMap: Map<StoryIndex>,
   iteration: Iteration,
   moveStory: (args: { fromIndex: number; toIndex: number }) => void
-) => (storyName: string, storyIndex: number) => {
+) => ({ storyName, storyIndex }: { storyName: string; storyIndex: number }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [, drop] = useDrop({
     accept: "Story",
@@ -65,6 +65,7 @@ const storyFactory = (
   return (
     <div
       ref={ref}
+      key={storyName}
       className={`${storyClass} ${
         hasPrecedingDependency ? precedingDependencyClass : ""
       } ${hasSucceedingDependency ? succeedingDependencyClass : ""}`}
@@ -78,31 +79,34 @@ const storyFactory = (
 
 const StoryOrdering = () => {
   const { state, dispatch } = useApplicationState();
-  const { storyOrdering, iterationParseResult } = state;
+  const { storyOrdering, iterationResult } = state;
 
   const storyIndexMap = createMap<StoryIndex>(
     storyOrdering.map((storyName, index) => ({ storyName, index })),
     ({ storyName }) => storyName
   );
 
-  return ParseResult.isParseResultOK(iterationParseResult) ? (
-    <>
-      <h3>Story Ordering</h3>
-      <p>
-        Drag/drop the stories below to change the order in which they should be
-        worked.
-      </p>
-      <div style={{ display: "flex" }}>
-        {storyOrdering.map(
-          storyFactory(storyIndexMap, iterationParseResult, (args) =>
-            dispatch({ kind: "MoveStory", ...args })
-          )
-        )}
-      </div>
-    </>
-  ) : (
-    <></>
-  );
+  if (Result.isOK(iterationResult)) {
+    const DragDroppableStory = storyFactory(
+      storyIndexMap,
+      iterationResult,
+      (args) => dispatch({ kind: "MoveStory", ...args })
+    );
+    return (
+      <>
+        <h3>Story Ordering</h3>
+        <p>
+          Drag/drop the stories below to change the order in which they should
+          be worked during the iteration.
+        </p>
+        <div style={{ display: "flex" }}>
+          {storyOrdering.map((story, index) => (
+            <DragDroppableStory storyName={story} storyIndex={index} />
+          ))}
+        </div>
+      </>
+    );
+  } else return <></>;
 };
 
 export default StoryOrdering;
