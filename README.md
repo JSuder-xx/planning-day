@@ -9,7 +9,7 @@ In a GUI provided by the plugin
 
 - Enumerate all Dev and QA team members.
 - Enter all story identifiers
-- Click **GenerateTypeScriptCode Code** which will generate TypeScript which defines the iteration.
+- Click **Generate Code** which will generate TypeScript which defines the iteration.
 
 ![Configuration](configuration.png)
 
