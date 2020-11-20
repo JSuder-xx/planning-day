@@ -61,6 +61,6 @@
     "rollup-plugin-progress": "^1.1.1",
     "rollup-plugin-serve": "^1.0.1",
     "rollup-plugin-terser": "^5.2.0",
-    "typescript": "^4.0.3"
+    "typescript": "^3.9.7"
   }
 }
