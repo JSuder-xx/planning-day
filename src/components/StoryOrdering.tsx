@@ -5,7 +5,8 @@ import { css } from "goober";
 import { Iteration } from "../models/iteration";
 import { useApplicationState } from "./ApplicationStateContext";
 import { createHozitonalOrderingHover } from "../helpers/dnd";
-import { Map, createMap } from "../helpers/map.json";
+import { partition } from "../helpers/array";
+import { createMap } from "../helpers/map.json";
 import { useDrag, useDrop } from "react-dnd";
 
 const storyClass = css`
@@ -18,11 +19,11 @@ const storyClass = css`
 `;
 
 const precedingDependencyClass = css`
-  border-left: solid 3px #99f;
+  border-left: solid 3px #9f9;
 `;
 
 const succeedingDependencyClass = css`
-  border-right: solid 3px #f00;
+  border-right: solid 3px #f44;
 `;
 
 type DragItem = {
@@ -35,11 +36,55 @@ type CollectedProps = { opacity: number };
 
 type StoryIndex = { storyName: string; index: number };
 
-const storyFactory = (
-  storyIndexMap: Map<StoryIndex>,
-  iteration: Iteration,
+type StoryViewModel = {
+  dependenciesBefore: string[];
+  dependenciesAfter: string[];
+  storyName: string;
+  storyIndex: number;
+  description?: string;
+};
+
+const createStoryViewModels = (
+  storyOrdering: readonly string[],
+  iteration: Iteration
+): StoryViewModel[] => {
+  const storyIndexMap = createMap<StoryIndex>(
+    storyOrdering.map((storyName, index) => ({ storyName, index })),
+    ({ storyName }) => storyName
+  );
+
+  return storyOrdering.map<StoryViewModel>((storyName, storyIndex) => {
+    const story = iteration.stories[storyName];
+    const [dependenciesBefore, dependenciesAfter] = partition(
+      story.dependsOn ?? [],
+      (dependency) => (storyIndexMap[dependency]?.index ?? 99999) < storyIndex
+    );
+
+    return {
+      dependenciesAfter,
+      dependenciesBefore,
+      storyName,
+      storyIndex,
+      description: story.description,
+    };
+  });
+};
+
+/** Creates a Drag/Drop React component. */
+const createDragDropStory = (
   moveStory: (args: { fromIndex: number; toIndex: number }) => void
-) => ({ storyName, storyIndex }: { storyName: string; storyIndex: number }) => {
+) => ({
+  story: {
+    storyName,
+    description,
+    storyIndex,
+    dependenciesBefore,
+    dependenciesAfter,
+  },
+}: {
+  story: StoryViewModel;
+}) => {
+  // DnD Plumbing
   const ref = useRef<HTMLDivElement>(null);
   const [, drop] = useDrop({
     accept: "Story",
@@ -53,26 +98,54 @@ const storyFactory = (
   });
   drag(drop(ref));
 
-  const story = iteration.stories[storyName];
-  const dependsOnBefore = (story.dependsOn ?? []).map(
-    (dependency) => (storyIndexMap[dependency]?.index ?? 99999) < storyIndex
-  );
-  const hasPrecedingDependency =
-    dependsOnBefore.length > 0 && dependsOnBefore.some((it) => it);
-  const hasSucceedingDependency =
-    dependsOnBefore.length > 0 && dependsOnBefore.some((it) => !it);
-
+  // Render
   return (
     <div
       ref={ref}
       key={storyName}
       className={`${storyClass} ${
-        hasPrecedingDependency ? precedingDependencyClass : ""
-      } ${hasSucceedingDependency ? succeedingDependencyClass : ""}`}
+        dependenciesBefore.length > 0 ? precedingDependencyClass : ""
+      } ${dependenciesAfter.length > 0 ? succeedingDependencyClass : ""}`}
       style={{ opacity }}
-      title={story?.description ?? storyName}
+      title={description ?? storyName}
     >
       {storyName}
+    </div>
+  );
+};
+
+const StoryOrderingValidation = ({
+  stories,
+}: {
+  stories: readonly StoryViewModel[];
+}) => {
+  const storiesWithFollowingDependencies = stories.filter(
+    (story) => story.dependenciesAfter.length > 0
+  );
+
+  return storiesWithFollowingDependencies.length === 0 ? (
+    <></>
+  ) : (
+    <div
+      style={{
+        marginTop: "10px",
+        marginBottom: "4px",
+        padding: "4px",
+        border: "solid 1px #777",
+      }}
+    >
+      {storiesWithFollowingDependencies.length === 1
+        ? "The following story is scheduled earlier in the iteration than its dependencies"
+        : "The following stories are scheduled earlier in the iteration than their dependencies"}
+      <ul>
+        {storiesWithFollowingDependencies.map((story) => (
+          <li>
+            {story.storyName} is scheduled before other stories on which it
+            depends:
+            {story.dependenciesAfter.join(", ")}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };
@@ -81,17 +154,13 @@ const StoryOrdering = () => {
   const { state, dispatch } = useApplicationState();
   const { storyOrdering, iterationResult } = state;
 
-  const storyIndexMap = createMap<StoryIndex>(
-    storyOrdering.map((storyName, index) => ({ storyName, index })),
-    ({ storyName }) => storyName
-  );
-
-  if (Result.isOK(iterationResult)) {
-    const DragDroppableStory = storyFactory(
-      storyIndexMap,
-      iterationResult,
-      (args) => dispatch({ kind: "MoveStory", ...args })
+  if (!Result.isOK(iterationResult)) return <></>;
+  else {
+    const DragDropStory = createDragDropStory((args) =>
+      dispatch({ kind: "MoveStory", ...args })
     );
+
+    const stories = createStoryViewModels(storyOrdering, iterationResult);
     return (
       <>
         <h3>Story Ordering</h3>
@@ -100,13 +169,14 @@ const StoryOrdering = () => {
           be worked during the iteration.
         </p>
         <div style={{ display: "flex" }}>
-          {storyOrdering.map((story, index) => (
-            <DragDroppableStory storyName={story} storyIndex={index} />
+          {stories.map((story) => (
+            <DragDropStory story={story} />
           ))}
         </div>
+        <StoryOrderingValidation stories={stories} />
       </>
     );
-  } else return <></>;
+  }
 };
 
 export default StoryOrdering;

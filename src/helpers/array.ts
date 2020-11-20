@@ -38,3 +38,16 @@ export const lastItemThrow = <T>(arr: T[]): T => {
   if (len < 0) throw new Error(`Cannot fetch last item of empty array.`);
   return arr[len - 1];
 };
+
+export const partition = <T>(
+  arr: readonly T[],
+  predicate: (val: T) => boolean
+): [T[], T[]] => {
+  const trueList: T[] = [];
+  const falseList: T[] = [];
+  arr.forEach((item) => {
+    (predicate(item) ? trueList : falseList).push(item);
+  });
+
+  return [trueList, falseList];
+};
