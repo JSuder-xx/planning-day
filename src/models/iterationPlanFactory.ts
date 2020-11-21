@@ -60,7 +60,7 @@ type ScheduledResource = {
 const createResources = (
   stories: StoryWithId[],
   teamSchedule: TeamSchedule<number>,
-  weekendDays: number[]
+  teamPTODays: readonly number[]
 ): UnscheduledResource[] => {
   const storyMap = createMap(stories, (story) => story.id);
   const resourceMap: { [resourceName: string]: Task[] } = {};
@@ -125,7 +125,7 @@ const createResources = (
     teamMemberSchedule.ptoDays.forEach((day) =>
       capacityAvailableOnDay.set(day, 0)
     );
-    weekendDays.forEach((day) => capacityAvailableOnDay.set(day, 0));
+    teamPTODays.forEach((day) => capacityAvailableOnDay.set(day, 0));
     return {
       name,
       tasks,
@@ -291,7 +291,7 @@ export const createIterationPlan = ({
   const resources = createResources(
     stories,
     iteration.teamSchedule,
-    iteration.weekendDays
+    iteration.userDates.teamPTODays
   );
   const scheduledResources = scheduleResources(
     resources,

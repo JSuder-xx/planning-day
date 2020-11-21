@@ -35,6 +35,7 @@ export type Dates<dateType> = {
   firstDayOfIteration: dateType;
   lastDayOfCoding: dateType;
   lastDayOfIteration: dateType;
+  teamPTODays: readonly dateType[];
 };
 
 type IterationJSON = {
@@ -47,7 +48,6 @@ export type Iteration = {
   startDayOfWeek: number;
   userDates: Dates<number>;
   lastDayToConsider: number;
-  weekendDays: number[];
   teamSchedule: TeamSchedule<number>;
   stories: Stories;
 };
@@ -60,22 +60,6 @@ const isIteration = (json: any): json is IterationJSON =>
     "lastDayOfCoding",
   ]);
 
-const convertObjectToDate = <T extends { [prop: string]: string }, TDate>(
-  obj: T,
-  convert: (val: string) => TDate | Error
-): { [property in keyof T]: TDate } => {
-  const result: { [property in keyof T]: TDate } = {} as any;
-  for (const fieldName in obj) {
-    result[fieldName] = TryM.getValue(
-      TryM.mapErrorMessage(
-        convert(obj[fieldName]),
-        (msg) => `Error converting ${fieldName}: ${msg}`
-      )
-    );
-  }
-  return result;
-};
-
 /** The number of days past the end of the iteration that we will continue to calculate weekend days. */
 const pastIterationEndBuffer = 14;
 
@@ -87,9 +71,32 @@ export const parseIterationJson = (json: any): Result.T<Iteration> => {
       );
       const startDayOfWeek = startDate.getDay();
       const dayOffset = getDaysOffset(startDate);
-      const userDates: Dates<number> = convertObjectToDate(json.dates, (str) =>
-        TryM.map(convertToDate(str), dayOffset)
-      );
+
+      const convertToDateNumber = (str: string, fieldName: string) =>
+        TryM.getValue(
+          TryM.mapErrorMessage(
+            TryM.map(convertToDate(str), dayOffset),
+            (msg) => `Error converting ${fieldName}: ${msg}`
+          )
+        );
+
+      const userDates: Dates<number> = {
+        firstDayOfIteration: convertToDateNumber(
+          json.dates.firstDayOfIteration,
+          "firstDayOfIteration"
+        ),
+        lastDayOfCoding: convertToDateNumber(
+          json.dates.lastDayOfCoding,
+          "lastDayOfCoding"
+        ),
+        lastDayOfIteration: convertToDateNumber(
+          json.dates.lastDayOfIteration,
+          "lastDayOfIteration"
+        ),
+        teamPTODays: json.dates.teamPTODays.map((day, index) =>
+          convertToDateNumber(day, `teamPTODays[${index}]`)
+        ),
+      };
 
       if (userDates.lastDayOfIteration < userDates.firstDayOfIteration)
         return new Error(`End date must be before the start date.`);
@@ -110,14 +117,19 @@ export const parseIterationJson = (json: any): Result.T<Iteration> => {
           }
         ),
         stories: json.stories,
-        userDates,
-        weekendDays: range(
-          0,
-          userDates.lastDayOfIteration + pastIterationEndBuffer
-        ).filter((it) => {
-          const adjustedDay = (it + startDayOfWeek) % 7;
-          return adjustedDay === 0 || adjustedDay === 6;
-        }),
+        userDates: {
+          ...userDates,
+          teamPTODays: [
+            ...userDates.teamPTODays,
+            ...range(
+              0,
+              userDates.lastDayOfIteration + pastIterationEndBuffer
+            ).filter((it) => {
+              const adjustedDay = (it + startDayOfWeek) % 7;
+              return adjustedDay === 0 || adjustedDay === 6;
+            }),
+          ],
+        },
       };
 
       const errors = [

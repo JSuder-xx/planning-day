@@ -115,6 +115,7 @@ type Iteration<teamMembers extends string, storyNames extends string> = {
     firstDayOfIteration: string;
     lastDayOfCoding: string;
     lastDayOfIteration: string;
+    teamPTODays: readonly string[];
   };
   teamSchedule: TeamSchedule<teamMembers>;
   stories: Stories<storyNames, teamMembers>;
@@ -141,7 +142,8 @@ defineIteration({
     dates: {
         firstDayOfIteration: "${formatDate(new Date())}",
         lastDayOfIteration: "${formatDate(addDays(new Date(), 13))}",
-        lastDayOfCoding: "${formatDate(addDays(new Date(), 10))}"
+        lastDayOfCoding: "${formatDate(addDays(new Date(), 10))}",
+        teamPTODays: []
     },
     teamSchedule: {${teamMembers.map(teamMemberCode).join("")}
     },
