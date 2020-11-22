@@ -39,7 +39,7 @@ export const Provider: React.FC<ProviderProps> = ({
   const [model, setModel] = useState<Model>();
   const [code, _setCode] = useState(sandbox.getText());
   const [markers, setMarkers] = useState<Marker[]>([]);
-  const [debounce, setDebounce] = useState(false);
+  const [debounce, setDebounce] = useState(true);
   const [resizeListener, sizes] = useResizeAware();
 
   const listenerFn = useCallback(
@@ -60,10 +60,13 @@ export const Provider: React.FC<ProviderProps> = ({
             key: index.toString(),
           };
         });
-      setMarkers(allMarkers);
+
+      const noMarkersBeforeNoMarkersNow =
+        markers.length === 0 && allMarkers.length === 0;
+      if (!noMarkersBeforeNoMarkersNow) setMarkers(allMarkers);
     });
     return () => disposable.dispose();
-  }, [sandbox]);
+  }, [sandbox, markers.length]);
 
   useEffect(() => bindCustomListener({ debounce, listenerFn }), [
     debounce,

@@ -104,6 +104,14 @@ export const parseIterationJson = (json: any): Result.T<Iteration> => {
         return new Error(
           `Last day of coding must be on or prior to last day of iteration.`
         );
+      if (userDates.lastDayOfCoding <= userDates.firstDayOfIteration)
+        return new Error(
+          `Last day of coding must follow the first day of the iteration. You have to give your devs a little time!`
+        );
+      if (userDates.lastDayOfIteration > 60)
+        return new Error(
+          `Cannot plan iterations more than 60 days with this tool.`
+        );
       const result = {
         teamSchedule: mapMap(
           json.teamSchedule,

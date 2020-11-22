@@ -6,6 +6,7 @@ import { State } from "./state";
 import { createSet } from "../helpers/set";
 import { moveItem } from "../helpers/array";
 import { createIterationPlan } from "./iterationPlanFactory";
+import compare from "react-fast-compare";
 
 export type UpdateTeamMembers = {
   readonly kind: "UpdateTeamMembers";
@@ -98,10 +99,12 @@ export const reducer = (state: State, action: Action): State => {
         storyOrdering,
         iterationResult: action.iterationResult,
         iterationPlanResult: Result.isOK(action.iterationResult)
-          ? createIterationPlan({
-              iteration: action.iterationResult,
-              storyOrdering,
-            })
+          ? compare(action.iterationResult, state.iterationResult)
+            ? state.iterationPlanResult
+            : createIterationPlan({
+                iteration: action.iterationResult,
+                storyOrdering,
+              })
           : null,
       };
 
