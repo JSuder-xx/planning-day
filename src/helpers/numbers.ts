@@ -1,3 +1,5 @@
+import { FractionOfOne, fractionOfOne } from "../models/numbers";
+
 export const range = (start: number, stop: number): number[] => {
   const result: number[] = [];
   let current = start;
@@ -7,3 +9,6 @@ export const range = (start: number, stop: number): number[] => {
   }
   return result;
 };
+
+export const fractionOfNumber = (num: number): FractionOfOne =>
+  fractionOfOne(num - Math.floor(num));

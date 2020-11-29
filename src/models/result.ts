@@ -1,3 +1,9 @@
+/**
+ * A tri-state computation result which can be
+ * - null means never attempted
+ * - Error indicates an error producing the result
+ * - result
+ **/
 export type T<result> = result | Error | null;
 
 export const isOK = <result>(value: T<result>): value is result =>
@@ -47,7 +53,7 @@ export const aggregateResultCases = <result>(
 export const aggregateResults = <result>(results: T<result>[]): T<result[]> => {
   const cases = aggregateResultCases(results);
   return cases.errors.length > 0
-    ? cases.errors[0] // TODO: actually aggregate rather than just taking first
+    ? new Error(cases.errors.map((err) => err.message).join(", "))
     : cases.numberOfNull > 0
     ? null
     : cases.results;

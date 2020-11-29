@@ -23,7 +23,8 @@ export const Provider: React.FC<{}> = ({ children }) => {
   setDebounce(true);
 
   useEffect(() => {
-    setCode(state.typeScriptCode);
+    const typeScriptCode = state.typeScriptCode;
+    if (typeScriptCode) setCode(typeScriptCode);
   }, [setCode, state.typeScriptCode]);
 
   useEffect(() => {

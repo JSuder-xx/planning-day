@@ -1,6 +1,16 @@
-import { IterationPlan, PlannedStory, PlannedTask } from "./iterationPlan";
+import {
+  DayWorked,
+  DayUsage,
+  IterationPlan,
+  PlannedStory,
+  PlannedTask,
+  ResourceView,
+  ScheduledTask,
+  TaskIdentifier,
+  Task,
+} from "./iterationPlan";
 import { Iteration, Story, TeamSchedule } from "./iteration";
-import { zeroBasedNumber } from "./numbers";
+import { zeroBasedIndex, fractionOfOne } from "./numbers";
 import {
   aggregate,
   createMap,
@@ -11,26 +21,7 @@ import {
 } from "../helpers/map.json";
 import { lastItemThrow, flatMap } from "../helpers/array";
 
-type TaskIdentifier = string & { __marker: "TaskIdentifier" };
-
 type StoryWithId = Story & { id: string };
-
-type Task = {
-  story: string;
-  kind: "dev" | "qa";
-  assigned: string;
-  durationInDays: number;
-  dependsOn: readonly TaskIdentifier[];
-};
-
-type DayWorked = {
-  startOfDay: number;
-  partOfDay: number;
-};
-
-type ScheduledTask = Task & {
-  daysWorked: DayWorked[];
-};
 
 const taskId = ({
   story,
@@ -49,12 +40,14 @@ type MutableScheduledResource = {
   readonly name: string;
   readonly remainingTasks: Task[];
   readonly scheduledTasks: ScheduledTask[];
+  readonly capacityAvailableOnDay: Map<number, number>;
 };
 
-type ScheduledResource = {
+export type ScheduledResource = {
   readonly name: string;
   readonly remainingTasks: readonly Task[];
   readonly scheduledTasks: readonly ScheduledTask[];
+  readonly capacityAvailableOnDay: Map<number, number>;
 };
 
 const createResources = (
@@ -145,8 +138,9 @@ const scheduleResources = (
     (_, val) => val.capacityAvailableOnDay
   );
   const resources: MutableScheduledResource[] = unscheduledResources.map(
-    ({ name, tasks }): MutableScheduledResource => ({
+    ({ name, tasks, capacityAvailableOnDay }): MutableScheduledResource => ({
       name,
+      capacityAvailableOnDay,
       remainingTasks: tasks.slice(),
       scheduledTasks: [],
     })
@@ -213,7 +207,7 @@ const scheduleResources = (
     let startOn = dependencies.reduce<number>((maxDay, scheduledTask) => {
       const lastDayWorked = lastItemThrow(scheduledTask.daysWorked);
       return Math.max(
-        lastDayWorked.startOfDay + lastDayWorked.partOfDay,
+        lastDayWorked.startOfDay + lastDayWorked.fractionOfDay,
         maxDay
       );
     }, 0);
@@ -225,15 +219,15 @@ const scheduleResources = (
     );
     if (capacityAvailableOnDay !== undefined && capacityAvailableOnDay > 0) {
       startOn = startOn + (1 - capacityAvailableOnDay);
-      const partOfDay = Math.min(remainingDays, 1 - fractionOf(startOn));
-      remainingDays -= partOfDay;
+      const fractionOfDay = Math.min(remainingDays, 1 - fractionOf(startOn));
+      remainingDays -= fractionOfDay;
       capacityAvailableOnDayMap.set(
         Math.floor(startOn),
-        capacityAvailableOnDay - partOfDay
+        capacityAvailableOnDay - fractionOfDay
       );
       daysWorked.push({
         startOfDay: startOn,
-        partOfDay,
+        fractionOfDay: fractionOfOne(fractionOfDay),
       });
     }
     let currentDay = Math.floor(startOn) + 1;
@@ -243,16 +237,16 @@ const scheduleResources = (
         Math.floor(currentDay)
       );
       if (capacityAvailableOnDay !== undefined && capacityAvailableOnDay > 0) {
-        const partOfDay = Math.min(remainingDays, capacityAvailableOnDay);
-        remainingDays -= partOfDay;
+        const fractionOfDay = Math.min(remainingDays, capacityAvailableOnDay);
+        remainingDays -= fractionOfDay;
         capacityAvailableOnDayMap.set(
           Math.floor(currentDay),
-          capacityAvailableOnDay - partOfDay
+          capacityAvailableOnDay - fractionOfDay
         );
 
         daysWorked.push({
           startOfDay: currentDay + (1 - capacityAvailableOnDay),
-          partOfDay,
+          fractionOfDay: fractionOfOne(fractionOfDay),
         });
       }
       currentDay++;
@@ -297,74 +291,126 @@ export const createIterationPlan = ({
     resources,
     iteration.lastDayToConsider
   );
-  const scheduledTasksByStory = aggregate(
-    flatMap(scheduledResources, (resource) => resource.scheduledTasks),
-    (task) => task.story
-  );
-  const remainingTasksByStory = aggregate(
-    flatMap(scheduledResources, (resource) => resource.remainingTasks),
-    (task) => task.story
-  );
 
-  const plannedStories = storyOrdering.map(createPlannedStory);
-
-  return {
-    dates: {
-      lastDayOfCoding: zeroBasedNumber(iteration.userDates.lastDayOfCoding),
-      endOfIteration: zeroBasedNumber(iteration.userDates.lastDayOfIteration),
-      lastStoryCompleted: zeroBasedNumber(
-        plannedStories.reduce<number>(
-          (lastDay, current) =>
-            current.completedDayNumberMaybe === null
-              ? lastDay
-              : Math.max(lastDay, current.completedDayNumberMaybe),
-          0
-        )
-      ),
-      startDayOfWeek: iteration.startDayOfWeek,
-    },
-    stories: plannedStories,
+  const dates = {
+    lastDayOfCoding: zeroBasedIndex(iteration.userDates.lastDayOfCoding),
+    endOfIteration: zeroBasedIndex(iteration.userDates.lastDayOfIteration),
+    startDayOfWeek: iteration.startDayOfWeek,
   };
 
-  function createPlannedStory(storyName: string): PlannedStory {
-    const story = storyMap[storyName];
-    const scheduledTasks = scheduledTasksByStory[storyName] || [];
-    const remainingTasks = remainingTasksByStory[storyName] || [];
-    return {
-      story: storyName,
-      description: story.description,
-      tasks: [
-        ...scheduledTasks.map(
-          (scheduledTask): PlannedTask => ({
-            assigned: scheduledTask.assigned,
-            kind: scheduledTask.kind,
-            daysWorkedTry: scheduledTask.daysWorked,
-          })
-        ),
-        ...remainingTasks.map(
-          (remainingTask): PlannedTask => ({
-            assigned: remainingTask.assigned,
-            kind: remainingTask.kind,
-            daysWorkedTry: new Error(
-              `Unable to schedule task of ${remainingTask.durationInDays} days`
-            ),
-          })
-        ),
-      ],
-      completedDayNumberMaybe:
-        remainingTasks.length > 0 || scheduledTasks.length < 1
-          ? null
-          : scheduledTasks.reduce<number>(
-              (max, current) =>
-                current.daysWorked.length === 0
-                  ? max
-                  : Math.max(
-                      max,
-                      current.daysWorked[current.daysWorked.length - 1]
-                        .startOfDay
-                    ),
+  return {
+    getStoriesPlan: () => {
+      const scheduledTasksByStory = aggregate(
+        flatMap(scheduledResources, (resource) => resource.scheduledTasks),
+        (task) => task.story
+      );
+      const remainingTasksByStory = aggregate(
+        flatMap(scheduledResources, (resource) => resource.remainingTasks),
+        (task) => task.story
+      );
+
+      const plannedStories = storyOrdering.map(createPlannedStory);
+
+      return {
+        dates: {
+          ...dates,
+          lastStoryCompleted: zeroBasedIndex(
+            plannedStories.reduce<number>(
+              (lastDay, current) =>
+                current.completedDayNumberMaybe === null
+                  ? lastDay
+                  : Math.max(lastDay, current.completedDayNumberMaybe),
               0
+            )
+          ),
+        },
+        stories: plannedStories,
+      };
+
+      function createPlannedStory(storyName: string): PlannedStory {
+        const story = storyMap[storyName];
+        const scheduledTasks = scheduledTasksByStory[storyName] || [];
+        const remainingTasks = remainingTasksByStory[storyName] || [];
+        return {
+          story: storyName,
+          description: story.description,
+          tasks: [
+            ...scheduledTasks.map(
+              (scheduledTask): PlannedTask => ({
+                assigned: scheduledTask.assigned,
+                kind: scheduledTask.kind,
+                daysWorkedTry: scheduledTask.daysWorked,
+              })
             ),
+            ...remainingTasks.map(
+              (remainingTask): PlannedTask => ({
+                assigned: remainingTask.assigned,
+                kind: remainingTask.kind,
+                daysWorkedTry: new Error(
+                  `Unable to schedule task of ${remainingTask.durationInDays} days`
+                ),
+              })
+            ),
+          ],
+          completedDayNumberMaybe:
+            remainingTasks.length > 0 || scheduledTasks.length < 1
+              ? null
+              : scheduledTasks.reduce<number>(
+                  (max, current) =>
+                    current.daysWorked.length === 0
+                      ? max
+                      : Math.max(
+                          max,
+                          current.daysWorked[current.daysWorked.length - 1]
+                            .startOfDay
+                        ),
+                  0
+                ),
+        };
+      }
+    },
+    getResourcesView: () => ({
+      resources: scheduledResources.map(createResourceView),
+      dates,
+    }),
+  };
+
+  function createResourceView({
+    name,
+    capacityAvailableOnDay,
+    scheduledTasks,
+  }: ScheduledResource): ResourceView {
+    const dayUsageMap = new Map<number, DayUsage>();
+    capacityAvailableOnDay.forEach((availableCapacity, dayNumber) => {
+      dayUsageMap.set(dayNumber, {
+        fractionIdle: fractionOfOne(availableCapacity),
+        fractionWorking: fractionOfOne(0),
+      });
+    });
+    scheduledTasks.forEach(({ daysWorked }) => {
+      daysWorked.forEach(({ startOfDay, fractionOfDay }) => {
+        const dayNumber = Math.floor(startOfDay);
+        const existingDayUsage = dayUsageMap.get(dayNumber);
+        dayUsageMap.set(
+          dayNumber,
+          existingDayUsage === undefined
+            ? {
+                fractionIdle: fractionOfOne(0),
+                fractionWorking: fractionOfOne(fractionOfDay),
+              }
+            : {
+                ...existingDayUsage,
+                fractionWorking: fractionOfOne(
+                  existingDayUsage.fractionWorking + fractionOfDay
+                ),
+              }
+        );
+      });
+    });
+
+    return {
+      name,
+      dayUsageMap,
     };
   }
 };

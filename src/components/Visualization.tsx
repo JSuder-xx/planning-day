@@ -1,11 +1,13 @@
 import React from "react";
 import { useApplicationState } from "./ApplicationStateContext";
+import List from "./List";
 import StoryOrdering from "./StoryOrdering";
 import GanttChart from "./GanttChart";
+import ScheduledResources from "./ScheduledResources";
 
 const Visualization = () => {
-  const { state } = useApplicationState();
-  const { iterationResult } = state;
+  const { dispatch, state } = useApplicationState();
+  const { iterationResult, planView, iterationPlanResult } = state;
 
   return iterationResult instanceof Error ? (
     <div>
@@ -13,10 +15,12 @@ const Visualization = () => {
       <p>
         There was an error parsing and validating the Iteration configuration on
         the left. Please correct
-        <ul>
-          <li>Any errors indicated by TypeScript (red squiggles)</li>
-          <li>Any validation messages indicated below.</li>
-        </ul>
+        <List
+          items={[
+            `Any errors indicated by TypeScript (red squiggles).`,
+            `Any validation messages indicated below.`,
+          ]}
+        />
       </p>
       <p>
         <label>Errors</label>
@@ -32,20 +36,38 @@ const Visualization = () => {
         <p>
           Modify the iteration parameters in the TypeScript playground window on
           the left. For example,
-          <ul>
-            <li>
-              For each team member, assign average capacity in hours per day and
-              also indicate days of PTO.
-            </li>
-            <li>
-              For each story, assign team members to perform Dev or QA
-              activities.
-            </li>
-          </ul>
+          <List
+            items={[
+              `For each team member, assign average capacity in hours per day and also indicate days of PTO.`,
+              `For each story, assign team members to perform Dev or QA activities.`,
+            ]}
+          />
         </p>
       </div>
       <StoryOrdering />
-      <GanttChart />
+      {iterationPlanResult === null ? (
+        <></>
+      ) : iterationPlanResult instanceof Error ? (
+        <div>{iterationPlanResult.message}</div>
+      ) : (
+        <div>
+          {planView === "GanttChart" ? (
+            <GanttChart
+              storiesPlan={iterationPlanResult.getStoriesPlan()}
+              changeToResourceView={() =>
+                dispatch({ kind: "ChangePlanView", planView: "Resource" })
+              }
+            />
+          ) : (
+            <ScheduledResources
+              resourcesView={iterationPlanResult.getResourcesView()}
+              changeToGanttView={() =>
+                dispatch({ kind: "ChangePlanView", planView: "GanttChart" })
+              }
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 };

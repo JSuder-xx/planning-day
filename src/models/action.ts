@@ -2,7 +2,7 @@ import { updateParsedField } from "./parsedField";
 import * as Result from "./result";
 import { Iteration } from "./iteration";
 import { createCode } from "./configuration";
-import { State } from "./state";
+import { State, PlanView } from "./state";
 import { createSet } from "../helpers/set";
 import { moveItem } from "../helpers/array";
 import { createIterationPlan } from "./iterationPlanFactory";
@@ -34,12 +34,18 @@ export type MoveStory = {
   readonly toIndex: number;
 };
 
+export type ChangePlanView = {
+  readonly kind: "ChangePlanView";
+  readonly planView: PlanView;
+};
+
 export type Action =
-  | UpdateTeamMembers
-  | UpdateStories
+  | ChangePlanView
   | GenerateTypeScriptCode
+  | MoveStory
   | UpdateIterationResult
-  | MoveStory;
+  | UpdateStories
+  | UpdateTeamMembers;
 
 const createGenerateCode = ({
   stories,
@@ -53,26 +59,10 @@ const createGenerateCode = ({
 
 export const reducer = (state: State, action: Action): State => {
   switch (action.kind) {
-    case "UpdateStories":
-      const stories = updateParsedField(state.stories, action.value);
+    case "ChangePlanView":
       return {
         ...state,
-        stories,
-        generateTypeScriptCodeResult: createGenerateCode({
-          stories,
-          teamMembers: state.teamMembers,
-        }),
-      };
-
-    case "UpdateTeamMembers":
-      const teamMembers = updateParsedField(state.teamMembers, action.value);
-      return {
-        ...state,
-        teamMembers,
-        generateTypeScriptCodeResult: createGenerateCode({
-          teamMembers,
-          stories: state.stories,
-        }),
+        planView: action.planView,
       };
 
     case "GenerateTypeScriptCode":
@@ -80,6 +70,26 @@ export const reducer = (state: State, action: Action): State => {
         ...state,
         typeScriptCode: action.generateCode(),
       };
+
+    case "MoveStory":
+      const storyOrderingTry = moveItem({
+        values: state.storyOrdering,
+        ...action,
+      });
+      if (storyOrderingTry instanceof Error) {
+        console.error(storyOrderingTry);
+        return state;
+      } else
+        return {
+          ...state,
+          storyOrdering: storyOrderingTry,
+          iterationPlanResult: Result.isOK(state.iterationResult)
+            ? createIterationPlan({
+                iteration: state.iterationResult,
+                storyOrdering: storyOrderingTry,
+              })
+            : null,
+        };
 
     case "UpdateIterationResult":
       const existingStorySet = createSet(state.storyOrdering);
@@ -108,24 +118,26 @@ export const reducer = (state: State, action: Action): State => {
           : null,
       };
 
-    case "MoveStory":
-      const storyOrderingTry = moveItem({
-        values: state.storyOrdering,
-        ...action,
-      });
-      if (storyOrderingTry instanceof Error) {
-        console.error(storyOrderingTry);
-        return state;
-      } else
-        return {
-          ...state,
-          storyOrdering: storyOrderingTry,
-          iterationPlanResult: Result.isOK(state.iterationResult)
-            ? createIterationPlan({
-                iteration: state.iterationResult,
-                storyOrdering: storyOrderingTry,
-              })
-            : null,
-        };
+    case "UpdateStories":
+      const stories = updateParsedField(state.stories, action.value);
+      return {
+        ...state,
+        stories,
+        generateTypeScriptCodeResult: createGenerateCode({
+          stories,
+          teamMembers: state.teamMembers,
+        }),
+      };
+
+    case "UpdateTeamMembers":
+      const teamMembers = updateParsedField(state.teamMembers, action.value);
+      return {
+        ...state,
+        teamMembers,
+        generateTypeScriptCodeResult: createGenerateCode({
+          teamMembers,
+          stories: state.stories,
+        }),
+      };
   }
 };

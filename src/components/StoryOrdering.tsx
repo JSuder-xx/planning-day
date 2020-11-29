@@ -5,6 +5,7 @@ import { css } from "goober";
 import { Iteration } from "../models/iteration";
 import { useApplicationState } from "./ApplicationStateContext";
 import { createHozitonalOrderingHover } from "../helpers/dnd";
+import List from "./List";
 import { partition } from "../helpers/array";
 import { createMap } from "../helpers/map.json";
 import { useDrag, useDrop } from "react-dnd";
@@ -137,15 +138,16 @@ const StoryOrderingValidation = ({
       {storiesWithFollowingDependencies.length === 1
         ? "The following story is scheduled earlier in the iteration than its dependencies"
         : "The following stories are scheduled earlier in the iteration than their dependencies"}
-      <ul>
-        {storiesWithFollowingDependencies.map((story) => (
-          <li>
-            {story.storyName} is scheduled before other stories on which it
-            depends:
-            {story.dependenciesAfter.join(", ")}
-          </li>
-        ))}
-      </ul>
+      <List
+        items={storiesWithFollowingDependencies.map(
+          (story) =>
+            `${
+              story.storyName
+            } is scheduled before other stories on which it depends: ${story.dependenciesAfter.join(
+              ", "
+            )}`
+        )}
+      />
     </div>
   );
 };

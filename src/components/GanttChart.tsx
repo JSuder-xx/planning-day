@@ -1,41 +1,17 @@
 import React from "react";
-import { useApplicationState } from "./ApplicationStateContext";
 import { createMap } from "../helpers/map.json";
-import { range } from "../helpers/numbers";
+import { fractionOfNumber, range } from "../helpers/numbers";
+import { StoriesPlan, PlannedStory, DayWorked } from "../models/iterationPlan";
 import {
-  IterationPlan,
-  PlannedStory,
-  DayWorked,
-} from "../models/iterationPlan";
-import { css } from "goober";
-
-const iterationPlanClass = css`
-  table {
-    border-spacing: 0;
-  }
-
-  td {
-    padding: 0;
-    border-right: solid 1px #999;
-  }
-`;
-
-const evenRowClass = css`
-  background-color: #333;
-`;
-
-const rowIntroductionClass = css`
-  td {
-    border-top-style: double;
-    border-top-color: #ccf;
-  }
-`;
-
-const storyTitleClass = css`
-  min-width: 80px;
-`;
-
-const columnWidthPixels = 32;
+  buttonClass,
+  fractionToPixels,
+  evenRowClass,
+  iterationPlanClass,
+  rowIntroductionClass,
+  titleCellClass,
+} from "./styles";
+import DayOfWeekHeaderRow from "./DayOfWeekHeaderRow";
+import DayNumberHeaderRow from "./DayNumberHeaderRow";
 
 const daysWorkedColumnFactory = (daysWorked: readonly DayWorked[]) => {
   const dayWorkedMap = createMap(daysWorked, (it) =>
@@ -50,11 +26,10 @@ const daysWorkedColumnFactory = (daysWorked: readonly DayWorked[]) => {
         <div
           style={{
             backgroundColor: "#46f",
-            marginLeft: `${
-              columnWidthPixels *
-              (dayWorked.startOfDay - Math.floor(dayWorked.startOfDay))
-            }px`,
-            width: `${columnWidthPixels * dayWorked.partOfDay}px`,
+            marginLeft: fractionToPixels(
+              fractionOfNumber(dayWorked.startOfDay)
+            ),
+            width: fractionToPixels(dayWorked.fractionOfDay),
             height: `16px`,
           }}
         ></div>
@@ -70,7 +45,7 @@ const storyRows = (dayNumbersOneBased: number[]) => (
   const rowClass = index % 2 === 1 ? evenRowClass : "";
   return [
     <tr className={`${rowIntroductionClass} ${rowClass}`}>
-      <td className={storyTitleClass}>
+      <td className={titleCellClass}>
         {plannedStory.story === plannedStory.description
           ? plannedStory.story
           : `${plannedStory.story}. ${plannedStory.description}`}
@@ -94,101 +69,40 @@ const storyRows = (dayNumbersOneBased: number[]) => (
   ];
 };
 
-const dayOfWeekAbbreviation = (day: number): string =>
-  day === 0
-    ? "Sun"
-    : day === 1
-    ? "Mon"
-    : day === 2
-    ? "Tue"
-    : day === 3
-    ? "Wed"
-    : day === 4
-    ? "Thu"
-    : day === 5
-    ? "Fri"
-    : day === 6
-    ? "Sat"
-    : "?";
-
-const GanttChart = () => {
-  const { state } = useApplicationState();
-  const { iterationPlanResult } = state;
-
-  return iterationPlanResult === null ? (
-    <></>
-  ) : iterationPlanResult instanceof Error ? (
-    <div>{iterationPlanResult.message}</div>
-  ) : (
-    iterationPlanView(iterationPlanResult)
-  );
-
-  function iterationPlanView(iterationPlan: IterationPlan) {
-    const {
-      endOfIteration,
-      lastDayOfCoding,
-      lastStoryCompleted,
-      startDayOfWeek,
-    } = iterationPlan.dates;
-    const lastDay = Math.max(endOfIteration, lastStoryCompleted);
-    return (
-      <div className={iterationPlanClass}>
-        <h3>Gantt Chart</h3>
+const GanttChart: React.FC<{
+  storiesPlan: StoriesPlan;
+  changeToResourceView: () => void;
+}> = ({ changeToResourceView, storiesPlan }) => {
+  const {
+    endOfIteration,
+    lastDayOfCoding,
+    lastStoryCompleted,
+    startDayOfWeek,
+  } = storiesPlan.dates;
+  const lastDay = Math.max(endOfIteration, lastStoryCompleted);
+  return (
+    <div className={iterationPlanClass}>
+      <h3>Gantt Chart</h3>
+      <button className={buttonClass} onClick={changeToResourceView}>
+        Change to Team Member View
+      </button>
+      <hr />
+      <div style={{ overflowX: "auto" }}>
         <table>
-          {dayOfWeekHeaderRow()}
-          {dayNumberHeaderRow()}
-          {iterationPlan.stories.map(storyRows(range(1, lastDay + 1)))}
+          <DayOfWeekHeaderRow
+            lastDay={lastDay}
+            startDayOfWeek={startDayOfWeek}
+          />
+          <DayNumberHeaderRow
+            lastDay={lastDay}
+            lastDayOfCoding={lastDayOfCoding}
+            endOfIteration={endOfIteration}
+          />
+          {storiesPlan.stories.map(storyRows(range(1, lastDay + 1)))}
         </table>
       </div>
-    );
-
-    function dayOfWeekHeaderRow() {
-      return (
-        <tr>
-          <td></td>
-          {range(0, lastDay).map((dayNumber) => {
-            const dayOfWeek = (dayNumber + startDayOfWeek) % 7;
-            return (
-              <td
-                style={{
-                  textAlign: "center",
-                  width: `${columnWidthPixels}px`,
-                  backgroundColor:
-                    dayOfWeek === 0 || dayOfWeek === 6 ? "#00a" : "#000",
-                }}
-              >
-                {dayOfWeekAbbreviation(dayOfWeek)}
-              </td>
-            );
-          })}
-        </tr>
-      );
-    }
-
-    function dayNumberHeaderRow() {
-      return (
-        <tr>
-          <td></td>
-          {range(0, lastDay).map((dayNumber) => (
-            <td
-              style={{
-                textAlign: "center",
-                width: `${columnWidthPixels}px`,
-                backgroundColor:
-                  dayNumber <= lastDayOfCoding
-                    ? "black"
-                    : dayNumber <= endOfIteration
-                    ? "#660"
-                    : "#800",
-              }}
-            >
-              {dayNumber + 1}
-            </td>
-          ))}
-        </tr>
-      );
-    }
-  }
+    </div>
+  );
 };
 
 export default GanttChart;
