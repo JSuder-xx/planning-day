@@ -99,7 +99,9 @@ export const parseIterationJson = (json: any): Result.T<Iteration> => {
       };
 
       if (userDates.lastDayOfIteration < userDates.firstDayOfIteration)
-        return new Error(`End date must be before the start date.`);
+        return new Error(
+          `The last day of the iteration must be on or after the first day.`
+        );
       if (userDates.lastDayOfCoding > userDates.lastDayOfIteration)
         return new Error(
           `Last day of coding must be on or prior to last day of iteration.`
