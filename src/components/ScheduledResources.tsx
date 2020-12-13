@@ -9,6 +9,7 @@ import {
 import List from "./List";
 import DayOfWeekHeaderRow from "./DayOfWeekHeaderRow";
 import DayNumberHeaderRow from "./DayNumberHeaderRow";
+import DateHeaderRow from "./DateHeaderRow";
 import { range } from "../helpers/numbers";
 
 const barHeight = `16px`;
@@ -57,11 +58,7 @@ const ScheduledResources: React.FC<{
   resourcesView: ResourcesView;
   changeToGanttView: () => void;
 }> = ({ changeToGanttView, resourcesView }) => {
-  const {
-    endOfIteration,
-    lastDayOfCoding,
-    startDayOfWeek,
-  } = resourcesView.dates;
+  const { endOfIteration, lastDayOfCoding, startDate } = resourcesView.dates;
   return (
     <div className={iterationPlanClass}>
       <h3>Team Member View</h3>
@@ -85,9 +82,10 @@ const ScheduledResources: React.FC<{
       </p>
       <div style={{ overflowX: "auto" }}>
         <table>
+          <DateHeaderRow lastDayNumber={endOfIteration} startDate={startDate} />
           <DayOfWeekHeaderRow
             lastDay={endOfIteration}
-            startDayOfWeek={startDayOfWeek}
+            startDayOfWeek={startDate.getDay()}
           />
           <DayNumberHeaderRow
             lastDay={endOfIteration}

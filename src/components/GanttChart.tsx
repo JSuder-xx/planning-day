@@ -12,6 +12,7 @@ import {
 } from "./styles";
 import DayOfWeekHeaderRow from "./DayOfWeekHeaderRow";
 import DayNumberHeaderRow from "./DayNumberHeaderRow";
+import DateHeaderRow from "./DateHeaderRow";
 
 const daysWorkedColumnFactory = (daysWorked: readonly DayWorked[]) => {
   const dayWorkedMap = createMap(daysWorked, (it) =>
@@ -74,12 +75,13 @@ const GanttChart: React.FC<{
   changeToResourceView: () => void;
 }> = ({ changeToResourceView, storiesPlan }) => {
   const {
+    startDate,
     endOfIteration,
     lastDayOfCoding,
     lastStoryCompleted,
-    startDayOfWeek,
   } = storiesPlan.dates;
   const lastDay = Math.max(endOfIteration, lastStoryCompleted);
+  const startDayOfWeek = startDate.getDay();
   return (
     <div className={iterationPlanClass}>
       <h3>Gantt Chart</h3>
@@ -89,6 +91,8 @@ const GanttChart: React.FC<{
       <hr />
       <div style={{ overflowX: "auto" }}>
         <table>
+          <DateHeaderRow lastDayNumber={endOfIteration} startDate={startDate} />
+
           <DayOfWeekHeaderRow
             lastDay={lastDay}
             startDayOfWeek={startDayOfWeek}

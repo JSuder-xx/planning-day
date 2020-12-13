@@ -45,7 +45,7 @@ type IterationJSON = {
 };
 
 export type Iteration = {
-  startDayOfWeek: number;
+  startDate: Date;
   userDates: Dates<number>;
   lastDayToConsider: number;
   teamSchedule: TeamSchedule<number>;
@@ -185,7 +185,7 @@ export const parseIterationJson = (json: any): Result.T<Iteration> => {
         ? new Error(errors.join(", "))
         : {
             ...result,
-            startDayOfWeek,
+            startDate,
             lastDayToConsider:
               result.userDates.lastDayOfIteration + pastIterationEndBuffer,
           };

@@ -48,7 +48,7 @@ export type StoriesPlan = {
     endOfIteration: ZeroBasedIndex;
     lastStoryCompleted: ZeroBasedIndex;
     /** The day of the week for day number 0. */
-    startDayOfWeek: number;
+    startDate: Date;
   };
   readonly stories: readonly PlannedStory[];
 };
@@ -57,7 +57,7 @@ export type ResourcesView = {
   readonly dates: {
     lastDayOfCoding: ZeroBasedIndex;
     endOfIteration: ZeroBasedIndex;
-    startDayOfWeek: number;
+    startDate: Date;
   };
   resources: readonly ResourceView[];
 };

@@ -295,7 +295,7 @@ export const createIterationPlan = ({
   const dates = {
     lastDayOfCoding: zeroBasedIndex(iteration.userDates.lastDayOfCoding),
     endOfIteration: zeroBasedIndex(iteration.userDates.lastDayOfIteration),
-    startDayOfWeek: iteration.startDayOfWeek,
+    startDate: iteration.startDate,
   };
 
   return {
